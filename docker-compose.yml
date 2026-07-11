@@ -1,0 +1,13 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - DB_PATH=/app/data/bot.db
+      - REMINDER_CHECK_INTERVAL_MINUTES=15
+    volumes:
+      - bot_data:/app/data
+
+volumes:
+  bot_data:
