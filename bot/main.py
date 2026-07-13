@@ -7,6 +7,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from bot import db
 from bot.config import BOT_TOKEN
 from bot.handlers import pets, purchase, start, triage
+from bot.middlewares import TrackUserMiddleware
 from bot.reminders import reminder_loop
 
 
@@ -20,6 +21,7 @@ async def main() -> None:
 
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher(storage=MemoryStorage())
+    dp.update.outer_middleware(TrackUserMiddleware())
     dp.include_router(start.router)
     dp.include_router(pets.router)
     dp.include_router(triage.router)

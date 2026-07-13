@@ -127,11 +127,32 @@ async def _migrate_legacy_treatment_columns(db: aiosqlite.Connection) -> None:
     await db.commit()
 
 
+async def _backfill_users_from_activity(db: aiosqlite.Connection) -> None:
+    """users only gets populated on /start going forward. Anyone who registered a pet
+    or ran a symptom check before that tracking existed (or who never resent /start
+    after it shipped) would otherwise be invisible in /stats — backfill them from
+    activity that already proves they're a real user. Idempotent, safe on every boot.
+    """
+    now = dt.datetime.now().isoformat()
+    await db.execute(
+        "INSERT OR IGNORE INTO users (chat_id, joined_at) "
+        "SELECT DISTINCT owner_chat_id, ? FROM pets",
+        (now,),
+    )
+    await db.execute(
+        "INSERT OR IGNORE INTO users (chat_id, joined_at) "
+        "SELECT DISTINCT owner_chat_id, ? FROM symptom_checks",
+        (now,),
+    )
+    await db.commit()
+
+
 async def init_db() -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(SCHEMA)
         await db.commit()
         await _migrate_legacy_treatment_columns(db)
+        await _backfill_users_from_activity(db)
 
 
 def _today() -> str:
