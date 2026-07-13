@@ -7,6 +7,19 @@ from bot.config import ADMIN_CHAT_IDS
 
 router = Router()
 
+REMINDER_TYPE_LABELS = {
+    "vaccination": "прививка",
+    "flea_tick": "блохи/клещи",
+    "deworm": "глисты",
+    "followup": "чек-ап через 12ч",
+}
+
+
+def _format_counts(counts: dict) -> str:
+    if not counts:
+        return "  пока нет данных"
+    return "\n".join(f"  {REMINDER_TYPE_LABELS.get(k, k)}: {v}" for k, v in counts.items())
+
 
 @router.message(F.text == texts.BTN_BUY)
 async def buy_button(message: Message) -> None:
@@ -34,5 +47,7 @@ async def stats_command(message: Message) -> None:
             pets=stats["pets"],
             purchase_interest=stats["purchase_interest"],
             outcomes=outcomes,
+            reminders_sent=_format_counts(stats["reminders_sent"]),
+            currently_overdue=_format_counts(stats["currently_overdue"]),
         )
     )

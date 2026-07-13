@@ -43,6 +43,13 @@ CREATE TABLE IF NOT EXISTS symptom_checks (
     followup_due_at TEXT,
     followup_sent INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS reminder_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pet_id INTEGER NOT NULL,
+    reminder_type TEXT NOT NULL,
+    sent_at TEXT NOT NULL
+);
 """
 
 
@@ -409,6 +416,15 @@ async def record_purchase_interest(chat_id: int) -> bool:
         return cursor.rowcount > 0
 
 
+async def log_reminder_sent(pet_id: int, reminder_type: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO reminder_log (pet_id, reminder_type, sent_at) VALUES (?, ?, ?)",
+            (pet_id, reminder_type, dt.datetime.now().isoformat()),
+        )
+        await db.commit()
+
+
 async def get_stats() -> dict:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
@@ -421,9 +437,52 @@ async def get_stats() -> dict:
             await db.execute("SELECT outcome, COUNT(*) AS c FROM symptom_checks GROUP BY outcome")
         ).fetchall()
         outcomes = {row["outcome"]: row["c"] for row in outcome_rows}
+
+        reminder_rows = await (
+            await db.execute(
+                "SELECT reminder_type, COUNT(*) AS c FROM reminder_log GROUP BY reminder_type"
+            )
+        ).fetchall()
+        reminders_sent = {row["reminder_type"]: row["c"] for row in reminder_rows}
+
+        today = _today()
+        due_vax = (
+            await (
+                await db.execute(
+                    "SELECT COUNT(*) AS c FROM pets WHERE next_vaccination_date IS NOT NULL "
+                    "AND next_vaccination_date <= ?",
+                    (today,),
+                )
+            ).fetchone()
+        )["c"]
+        due_flea = (
+            await (
+                await db.execute(
+                    "SELECT COUNT(*) AS c FROM pets WHERE next_flea_tick_date IS NOT NULL "
+                    "AND next_flea_tick_date <= ?",
+                    (today,),
+                )
+            ).fetchone()
+        )["c"]
+        due_deworm = (
+            await (
+                await db.execute(
+                    "SELECT COUNT(*) AS c FROM pets WHERE next_deworm_date IS NOT NULL "
+                    "AND next_deworm_date <= ?",
+                    (today,),
+                )
+            ).fetchone()
+        )["c"]
+
         return {
             "users": users,
             "pets": pets,
             "purchase_interest": interest,
             "outcomes": outcomes,
+            "reminders_sent": reminders_sent,
+            "currently_overdue": {
+                "vaccination": due_vax,
+                "flea_tick": due_flea,
+                "deworm": due_deworm,
+            },
         }

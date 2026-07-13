@@ -17,6 +17,7 @@ async def _send_vaccination_reminders(bot: Bot) -> None:
                 f"💉 Пора сделать прививку питомцу «{pet['name']}» "
                 f"(дата: {pet['next_vaccination_date']}). Отметьте в «Мои питомцы», когда сделаете.",
             )
+            await db.log_reminder_sent(pet["id"], "vaccination")
         except Exception:
             logger.exception("Failed to send vaccination reminder for pet %s", pet["id"])
         finally:
@@ -31,6 +32,7 @@ async def _send_flea_tick_reminders(bot: Bot) -> None:
                 f"🦟 Пора обработать от блох/клещей питомца «{pet['name']}» "
                 f"(дата: {pet['next_flea_tick_date']}). Отметьте в «Мои питомцы», когда сделаете.",
             )
+            await db.log_reminder_sent(pet["id"], "flea_tick")
         except Exception:
             logger.exception("Failed to send flea/tick reminder for pet %s", pet["id"])
         finally:
@@ -45,6 +47,7 @@ async def _send_deworm_reminders(bot: Bot) -> None:
                 f"🪱 Пора обработать от глистов питомца «{pet['name']}» "
                 f"(дата: {pet['next_deworm_date']}). Отметьте в «Мои питомцы», когда сделаете.",
             )
+            await db.log_reminder_sent(pet["id"], "deworm")
         except Exception:
             logger.exception("Failed to send deworm reminder for pet %s", pet["id"])
         finally:
@@ -57,6 +60,7 @@ async def _send_followups(bot: Bot) -> None:
         name = pet["name"] if pet else "питомца"
         try:
             await bot.send_message(check["owner_chat_id"], texts.FOLLOWUP_QUESTION.format(name=name))
+            await db.log_reminder_sent(check["pet_id"], "followup")
         except Exception:
             logger.exception("Failed to send followup for check %s", check["id"])
         finally:
