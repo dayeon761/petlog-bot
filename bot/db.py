@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS pets (
 
 CREATE TABLE IF NOT EXISTS users (
     chat_id INTEGER PRIMARY KEY,
-    joined_at TEXT NOT NULL
+    joined_at TEXT NOT NULL,
+    last_seen TEXT
 );
 
 CREATE TABLE IF NOT EXISTS purchase_interest (
@@ -49,6 +50,13 @@ CREATE TABLE IF NOT EXISTS reminder_log (
     pet_id INTEGER NOT NULL,
     reminder_type TEXT NOT NULL,
     sent_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS broadcast_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    text TEXT NOT NULL,
+    sent_at TEXT NOT NULL,
+    recipient_count INTEGER NOT NULL
 );
 """
 
@@ -154,11 +162,21 @@ async def _backfill_users_from_activity(db: aiosqlite.Connection) -> None:
     await db.commit()
 
 
+async def _migrate_add_last_seen_column(db: aiosqlite.Connection) -> None:
+    cursor = await db.execute("PRAGMA table_info(users)")
+    columns = {row[1] for row in await cursor.fetchall()}
+    if "last_seen" in columns:
+        return
+    await db.execute("ALTER TABLE users ADD COLUMN last_seen TEXT")
+    await db.commit()
+
+
 async def init_db() -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(SCHEMA)
         await db.commit()
         await _migrate_legacy_treatment_columns(db)
+        await _migrate_add_last_seen_column(db)
         await _backfill_users_from_activity(db)
 
 
@@ -390,10 +408,23 @@ async def mark_followup_sent(check_id: int) -> None:
 
 
 async def upsert_user(chat_id: int) -> None:
+    now = dt.datetime.now().isoformat()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "INSERT OR IGNORE INTO users (chat_id, joined_at) VALUES (?, ?)",
-            (chat_id, dt.datetime.now().isoformat()),
+            """
+            INSERT INTO users (chat_id, joined_at, last_seen) VALUES (?, ?, ?)
+            ON CONFLICT(chat_id) DO UPDATE SET last_seen = excluded.last_seen
+            """,
+            (chat_id, now, now),
+        )
+        await db.commit()
+
+
+async def log_broadcast(text: str, recipient_count: int) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO broadcast_log (text, sent_at, recipient_count) VALUES (?, ?, ?)",
+            (text, dt.datetime.now().isoformat(), recipient_count),
         )
         await db.commit()
 
@@ -474,6 +505,44 @@ async def get_stats() -> dict:
             ).fetchone()
         )["c"]
 
+        now = dt.datetime.now()
+        active_24h = (
+            await (
+                await db.execute(
+                    "SELECT COUNT(*) AS c FROM users WHERE last_seen IS NOT NULL AND last_seen > ?",
+                    ((now - dt.timedelta(hours=24)).isoformat(),),
+                )
+            ).fetchone()
+        )["c"]
+        active_7d = (
+            await (
+                await db.execute(
+                    "SELECT COUNT(*) AS c FROM users WHERE last_seen IS NOT NULL AND last_seen > ?",
+                    ((now - dt.timedelta(days=7)).isoformat(),),
+                )
+            ).fetchone()
+        )["c"]
+
+        last_broadcast_row = await (
+            await db.execute("SELECT * FROM broadcast_log ORDER BY sent_at DESC LIMIT 1")
+        ).fetchone()
+        last_broadcast = None
+        if last_broadcast_row is not None:
+            active_since = (
+                await (
+                    await db.execute(
+                        "SELECT COUNT(*) AS c FROM users "
+                        "WHERE last_seen IS NOT NULL AND last_seen > ?",
+                        (last_broadcast_row["sent_at"],),
+                    )
+                ).fetchone()
+            )["c"]
+            last_broadcast = {
+                "sent_at": last_broadcast_row["sent_at"],
+                "recipient_count": last_broadcast_row["recipient_count"],
+                "active_since": active_since,
+            }
+
         return {
             "users": users,
             "pets": pets,
@@ -485,4 +554,7 @@ async def get_stats() -> dict:
                 "flea_tick": due_flea,
                 "deworm": due_deworm,
             },
+            "active_24h": active_24h,
+            "active_7d": active_7d,
+            "last_broadcast": last_broadcast,
         }

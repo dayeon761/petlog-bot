@@ -32,6 +32,17 @@ async def stats_command(message: Message) -> None:
         return
     stats = await db.get_stats()
     outcomes = "\n".join(f"  {k}: {v}" for k, v in stats["outcomes"].items()) or "  пока нет данных"
+
+    last_broadcast = stats["last_broadcast"]
+    if last_broadcast is None:
+        broadcast_line = "  рассылок ещё не было"
+    else:
+        broadcast_line = (
+            f"  отправлена: {last_broadcast['sent_at'][:16].replace('T', ' ')}, "
+            f"получателей: {last_broadcast['recipient_count']}\n"
+            f"  заходили в бота после неё: {last_broadcast['active_since']}"
+        )
+
     await message.answer(
         texts.STATS_TEMPLATE.format(
             users=stats["users"],
@@ -40,6 +51,9 @@ async def stats_command(message: Message) -> None:
             outcomes=outcomes,
             reminders_sent=_format_counts(stats["reminders_sent"]),
             currently_overdue=_format_counts(stats["currently_overdue"]),
+            active_24h=stats["active_24h"],
+            active_7d=stats["active_7d"],
+            last_broadcast=broadcast_line,
         )
     )
 
@@ -86,4 +100,5 @@ async def broadcast_send(callback: CallbackQuery, state: FSMContext, bot: Bot) -
             failed += 1
         await asyncio.sleep(0.05)
 
+    await db.log_broadcast(text, sent)
     await callback.message.answer(texts.BROADCAST_DONE.format(sent=sent, failed=failed))
