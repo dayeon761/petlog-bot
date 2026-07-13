@@ -3,7 +3,7 @@ from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from bot import keyboards, texts
+from bot import db, keyboards, texts
 
 router = Router()
 
@@ -11,6 +11,7 @@ router = Router()
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
+    await db.upsert_user(message.chat.id)
     await message.answer(texts.WELCOME, reply_markup=keyboards.main_menu())
 
 

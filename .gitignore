@@ -3,4 +3,4 @@ __pycache__/
 *.pyc
 .env
 bot.db
-bot.db.bak
+bot.db.bak*

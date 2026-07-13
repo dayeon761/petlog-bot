@@ -6,7 +6,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot import db
 from bot.config import BOT_TOKEN
-from bot.handlers import pets, start, triage
+from bot.handlers import pets, purchase, start, triage
 from bot.reminders import reminder_loop
 
 
@@ -23,6 +23,7 @@ async def main() -> None:
     dp.include_router(start.router)
     dp.include_router(pets.router)
     dp.include_router(triage.router)
+    dp.include_router(purchase.router)
 
     asyncio.create_task(reminder_loop(bot))
 

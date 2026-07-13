@@ -24,6 +24,16 @@ CREATE TABLE IF NOT EXISTS pets (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    chat_id INTEGER PRIMARY KEY,
+    joined_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS purchase_interest (
+    chat_id INTEGER PRIMARY KEY,
+    clicked_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS symptom_checks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pet_id INTEGER NOT NULL,
@@ -349,3 +359,50 @@ async def mark_followup_sent(check_id: int) -> None:
             "UPDATE symptom_checks SET followup_sent = 1 WHERE id = ?", (check_id,)
         )
         await db.commit()
+
+
+async def upsert_user(chat_id: int) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO users (chat_id, joined_at) VALUES (?, ?)",
+            (chat_id, dt.datetime.now().isoformat()),
+        )
+        await db.commit()
+
+
+async def get_all_user_chat_ids() -> list[int]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT chat_id FROM users ORDER BY joined_at")
+        return [row[0] for row in await cursor.fetchall()]
+
+
+async def record_purchase_interest(chat_id: int) -> bool:
+    """Returns True if this is a new interest signal, False if chat_id already recorded
+    (idempotent — repeated taps on the Fake Door button don't inflate the count)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "INSERT OR IGNORE INTO purchase_interest (chat_id, clicked_at) VALUES (?, ?)",
+            (chat_id, dt.datetime.now().isoformat()),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def get_stats() -> dict:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        users = (await (await db.execute("SELECT COUNT(*) AS c FROM users")).fetchone())["c"]
+        pets = (await (await db.execute("SELECT COUNT(*) AS c FROM pets")).fetchone())["c"]
+        interest = (
+            await (await db.execute("SELECT COUNT(*) AS c FROM purchase_interest")).fetchone()
+        )["c"]
+        outcome_rows = await (
+            await db.execute("SELECT outcome, COUNT(*) AS c FROM symptom_checks GROUP BY outcome")
+        ).fetchall()
+        outcomes = {row["outcome"]: row["c"] for row in outcome_rows}
+        return {
+            "users": users,
+            "pets": pets,
+            "purchase_interest": interest,
+            "outcomes": outcomes,
+        }

@@ -15,6 +15,7 @@ def main_menu() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text=texts.BTN_ADD_PET), KeyboardButton(text=texts.BTN_MY_PETS)],
             [KeyboardButton(text=texts.BTN_CHECK_SYMPTOMS)],
+            [KeyboardButton(text=texts.BTN_BUY)],
             [KeyboardButton(text=texts.BTN_HELP)],
         ],
         resize_keyboard=True,
@@ -82,4 +83,10 @@ def checklist(items: list[str], selected: set[int], category: str, next_text: st
             InlineKeyboardButton(text=f"{mark} {item}", callback_data=f"chk:{category}:{index}")
         )
     builder.row(InlineKeyboardButton(text=next_text, callback_data=f"chk:{category}:next"))
+    return builder.as_markup()
+
+
+def buy_confirm() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text=texts.BUY_CONFIRM_BTN, callback_data="buy_interest_confirm")
     return builder.as_markup()

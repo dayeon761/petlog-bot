@@ -7,6 +7,10 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 DB_PATH = os.getenv("DB_PATH", "bot.db")
 
+# Chat ID пользователей, которым доступна команда /stats. Узнать свой chat_id можно
+# у @userinfobot в Telegram. Несколько ID — через запятую.
+ADMIN_CHAT_IDS = {int(x) for x in os.getenv("ADMIN_CHAT_IDS", "").split(",") if x.strip()}
+
 # Как часто фоновый процесс проверяет напоминания (прививки/обработки/чек-апы)
 REMINDER_CHECK_INTERVAL_MINUTES = int(os.getenv("REMINDER_CHECK_INTERVAL_MINUTES", "15"))
 
