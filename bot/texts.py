@@ -57,6 +57,13 @@ STATS_TEMPLATE = (
 )
 STATS_NOT_ADMIN = "Эта команда доступна только владельцу бота."
 
+BROADCAST_USAGE = "Использование: /broadcast <текст сообщения>"
+BROADCAST_PREVIEW = "Получателей: {count}\n\nТекст:\n{text}\n\nОтправить всем?"
+BROADCAST_CANCELLED = "Рассылка отменена."
+BROADCAST_DONE = "Готово. Отправлено: {sent}, ошибок: {failed}."
+BTN_BROADCAST_SEND = "✅ Отправить всем"
+BTN_BROADCAST_CANCEL = "❌ Отмена"
+
 CANCELLED = "Действие отменено. Возвращаемся в меню."
 
 ASK_PET_NAME = "Как зовут питомца?"

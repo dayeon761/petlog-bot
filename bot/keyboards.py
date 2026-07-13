@@ -90,3 +90,11 @@ def buy_confirm() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text=texts.BUY_CONFIRM_BTN, callback_data="buy_interest_confirm")
     return builder.as_markup()
+
+
+def broadcast_confirm() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text=texts.BTN_BROADCAST_SEND, callback_data="broadcast_send")
+    builder.button(text=texts.BTN_BROADCAST_CANCEL, callback_data="broadcast_cancel")
+    builder.adjust(1)
+    return builder.as_markup()

@@ -16,3 +16,7 @@ class Triage(StatesGroup):
     red_flags = State()
     behavior_signs = State()
     general_signs = State()
+
+
+class Broadcast(StatesGroup):
+    confirm = State()
