@@ -344,6 +344,35 @@ async def get_due_deworm() -> list[aiosqlite.Row]:
         return await cursor.fetchall()
 
 
+REMINDER_DATE_FIELDS = {
+    "vaccination": "next_vaccination_date",
+    "flea_tick": "next_flea_tick_date",
+    "deworm": "next_deworm_date",
+}
+
+
+async def get_upcoming(kind: str, days_before: int) -> list[aiosqlite.Row]:
+    """Pets whose next_*_date is exactly `days_before` days from today — used for the
+    one-off heads-up reminders (7 days / 1 day before), as opposed to get_due_* which
+    covers the due date itself and every day after while still overdue."""
+    column = REMINDER_DATE_FIELDS[kind]
+    target_date = (dt.date.today() + dt.timedelta(days=days_before)).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(f"SELECT * FROM pets WHERE {column} = ?", (target_date,))
+        return await cursor.fetchall()
+
+
+async def has_reminder_logged_today(pet_id: int, reminder_type: str) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT 1 FROM reminder_log WHERE pet_id = ? AND reminder_type = ? "
+            "AND sent_at >= ? LIMIT 1",
+            (pet_id, reminder_type, _today()),
+        )
+        return await cursor.fetchone() is not None
+
+
 async def set_vax_reminder_sent(pet_id: int) -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(

@@ -1,6 +1,7 @@
 import datetime as dt
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -236,6 +237,26 @@ async def _pet_or_alert(callback: CallbackQuery, pet_id: int):
     return pet
 
 
+async def _refresh_pet_card(callback: CallbackQuery, pet_id: int) -> None:
+    """Re-renders the pet's card in place after any action, so the new due dates are
+    visible right where the button was — otherwise it's unclear whether a tap on
+    "сделано" actually did anything, since the old card just sat there unchanged."""
+    pet = await db.get_pet(pet_id)
+    summary = format_pet_summary(
+        name=pet["name"],
+        species=pet["species"],
+        age=pet["age"],
+        next_vax=pet["next_vaccination_date"],
+        flea_tick_interval_days=pet["flea_tick_interval_days"],
+        next_flea_tick=pet["next_flea_tick_date"],
+        next_deworm=pet["next_deworm_date"],
+    )
+    try:
+        await callback.message.edit_text(summary, reply_markup=keyboards.pet_actions(pet_id))
+    except TelegramBadRequest:
+        pass  # marked "done" twice same day — dates didn't change, nothing to edit
+
+
 @router.callback_query(F.data.startswith("petvax:"))
 async def pet_vax_done(callback: CallbackQuery) -> None:
     pet_id = int(callback.data.split(":", 1)[1])
@@ -243,8 +264,8 @@ async def pet_vax_done(callback: CallbackQuery) -> None:
         return
     next_date = dt.date.today() + dt.timedelta(days=VACCINATION_INTERVAL_DAYS)
     await db.mark_vaccination_done(pet_id, next_date.isoformat())
-    await callback.answer("Отмечено!")
-    await callback.message.answer(f"Готово. Следующая прививка: {next_date.isoformat()}")
+    await callback.answer("Прививка отмечена ✅")
+    await _refresh_pet_card(callback, pet_id)
 
 
 @router.callback_query(F.data.startswith("petflea:"))
@@ -252,9 +273,9 @@ async def pet_flea_tick_done(callback: CallbackQuery) -> None:
     pet_id = int(callback.data.split(":", 1)[1])
     if await _pet_or_alert(callback, pet_id) is None:
         return
-    next_date = await db.mark_flea_tick_done(pet_id)
-    await callback.answer("Отмечено!")
-    await callback.message.answer(f"Готово. Следующая обработка от блох/клещей: {next_date}")
+    await db.mark_flea_tick_done(pet_id)
+    await callback.answer("Обработка от блох/клещей отмечена ✅")
+    await _refresh_pet_card(callback, pet_id)
 
 
 @router.callback_query(F.data.startswith("petdeworm:"))
@@ -262,9 +283,9 @@ async def pet_deworm_done(callback: CallbackQuery) -> None:
     pet_id = int(callback.data.split(":", 1)[1])
     if await _pet_or_alert(callback, pet_id) is None:
         return
-    next_date = await db.mark_deworm_done(pet_id)
-    await callback.answer("Отмечено!")
-    await callback.message.answer(f"Готово. Следующая обработка от глистов: {next_date}")
+    await db.mark_deworm_done(pet_id)
+    await callback.answer("Обработка от глистов отмечена ✅")
+    await _refresh_pet_card(callback, pet_id)
 
 
 @router.callback_query(F.data.startswith("petdel:"))
@@ -275,4 +296,4 @@ async def pet_delete(callback: CallbackQuery) -> None:
         return
     await db.delete_pet(pet_id, callback.message.chat.id)
     await callback.answer("Удалено")
-    await callback.message.answer(f"Питомец «{pet['name']}» удалён.")
+    await callback.message.edit_text(f"Питомец «{pet['name']}» удалён.", reply_markup=None)
